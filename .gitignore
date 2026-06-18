@@ -1,6 +1,10 @@
 # Secrets / local config
 .env
 
+# Local audit trail (JSONL action log)
+*.jsonl
+aria-actions.jsonl
+
 # Python
 __pycache__/
 *.py[cod]

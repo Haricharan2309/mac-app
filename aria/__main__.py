@@ -16,6 +16,7 @@ import argparse
 import asyncio
 import sys
 
+from .audit import ActionLog
 from .config import load_settings
 from .orchestrator import Orchestrator
 
@@ -27,7 +28,7 @@ async def _run_live() -> None:
     settings = load_settings(require_key=True)
     provider = GrokRealtimeProvider(settings)
     audio = AudioIO(sample_rate=24_000)
-    orch = Orchestrator(settings, provider, audio)
+    orch = Orchestrator(settings, provider, audio, audit=ActionLog(settings.log_file))
     print("Aria — live voice. Speak into your mic; press Ctrl-C to quit.")
     try:
         await orch.run()
@@ -41,7 +42,7 @@ async def _run_text() -> None:
 
     settings = load_settings(require_key=True)
     provider = GrokRealtimeProvider(settings)
-    orch = Orchestrator(settings, provider)
+    orch = Orchestrator(settings, provider, audit=ActionLog(settings.log_file))
 
     # Feed typed lines in as user turns alongside the normal event loop.
     async def reader() -> None:
@@ -80,10 +81,16 @@ async def _run_simulate() -> None:
     settings = load_settings(require_key=False)
     object.__setattr__(settings, "dashboard_url", "demo://dashboard")
     provider = FakeProvider()
-    orch = Orchestrator(settings, provider)
+    audit = ActionLog()  # in-memory only for the demo
+    orch = Orchestrator(settings, provider, audit=audit)
     print("Aria — offline simulation of the Phase 0 loop "
           "(ack → async task → narration → barge-in → clean cancel)\n")
     await orch.run()
+
+    print("\n  [audit trail] what Aria recorded:")
+    for e in audit.entries:
+        extra = " ".join(f"{k}={v}" for k, v in e.items() if k not in ("ts", "kind"))
+        print(f"    - {e['kind']:<15} {extra}")
 
 
 def main() -> None:

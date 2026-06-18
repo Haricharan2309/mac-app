@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 from typing import Callable, Optional
 
+from .audit import ActionLog
 from .config import Settings
 from .state import AgentState, CancelToken, RunningTask
 from .tasks.read_dashboard import run_read_dashboard
@@ -54,12 +55,14 @@ class Orchestrator:
         audio=None,
         *,
         log: Callable[[str], None] = print,
+        audit: Optional[ActionLog] = None,
     ) -> None:
         self.settings = settings
         self.provider = provider
         self.audio = audio
         self.state = AgentState.IDLE
         self._log = log
+        self.audit = audit or ActionLog()  # no path -> in-memory only
 
         self._running: Optional[RunningTask] = None
         self._response_active = False
@@ -74,19 +77,31 @@ class Orchestrator:
         if self.audio is not None:
             await self.audio.start(self.provider.send_audio)
 
-        async for ev in self.provider.events():
-            if ev.type == EventType.CLOSED:
-                break
-            try:
-                await self._on_event(ev)
-            except Exception as exc:  # noqa: BLE001 - a bad event must not kill the loop
-                self._log(f"  [orchestrator error] {exc}")
+        try:
+            async for ev in self.provider.events():
+                if ev.type == EventType.CLOSED:
+                    break
+                try:
+                    await self._on_event(ev)
+                except Exception as exc:  # noqa: BLE001 - a bad event must not kill the loop
+                    self._log(f"  [orchestrator error] {exc}")
+        finally:
+            # Clean teardown: never leave a background task running after the
+            # session ends (read-only, so this is just tidy cancellation).
+            if self._running is not None:
+                await self._running.cancel()
+                self._running = None
 
     async def _on_event(self, ev: VoiceEvent) -> None:
         t = ev.type
         if t == EventType.SESSION_READY:
+            self.audit.record("session_ready")
             self._log("  [ready] Aria is listening. Try: "
                       '"open my dashboard and read me the top of the page"')
+            # Greet first so the user knows what to ask (activation guidance).
+            # Fire-and-forget so we never block the event loop.
+            if self.settings.greeting:
+                asyncio.create_task(self._speak(self.settings.greeting))
         elif t == EventType.RESPONSE_STARTED:
             self._mark_active(True)
         elif t == EventType.RESPONSE_DONE:
@@ -131,10 +146,12 @@ class Orchestrator:
     # --- the one task -------------------------------------------------------
     async def _on_function_call(self, data: dict) -> None:
         if data.get("name") != "read_dashboard":
+            self.audit.record("ignored_tool", name=data.get("name"))
             self._log(f"  [ignored tool] {data.get('name')!r}")
             return
 
         call_id = data.get("call_id", "")
+        self.audit.record("intent", tool="read_dashboard", call_id=call_id)
         # Record the result immediately so the model's context stays consistent,
         # then dispatch the real work to the background. We do NOT block the event
         # loop here — narration/ack happen inside the task so RESPONSE_DONE events
@@ -149,11 +166,13 @@ class Orchestrator:
 
     async def _do_read(self, token: CancelToken) -> None:
         try:
+            self.audit.record("task_started", task="read_dashboard", url=self.settings.dashboard_url)
             await self._speak("Opening your dashboard now.")  # instant ack (<500ms)
 
             async def narrate(key: str) -> None:
                 line = MILESTONES.get(key)
                 if line:
+                    self.audit.record("narrate", milestone=key)
                     await self._speak(line)
 
             text = await run_read_dashboard(
@@ -164,6 +183,7 @@ class Orchestrator:
                 narrate=narrate,
             )
             token.raise_if_cancelled()
+            self.audit.record("task_completed", task="read_dashboard", chars=len(text))
             await self._create_response(
                 "Read the top of the user's dashboard aloud, naturally and "
                 "conversationally. If it's long, read just the most important lines. "
@@ -174,6 +194,7 @@ class Orchestrator:
             # half-finished to roll back. We simply stop.
             raise
         except Exception as exc:  # noqa: BLE001
+            self.audit.record("error", where="read_dashboard", message=str(exc))
             self._log(f"  [task failed] {exc}")
             try:
                 await self._speak("Sorry — I couldn't read that page.")
@@ -187,6 +208,7 @@ class Orchestrator:
 
     # --- barge-in -----------------------------------------------------------
     async def _on_barge_in(self) -> None:
+        self.audit.record("barge_in", task_running=self._running is not None)
         # 1) Stop talking immediately. Flush queued audio always; only ask the
         #    model to cancel when a response is actually in progress (otherwise
         #    the server has nothing to cancel and emits a spurious error).
@@ -199,6 +221,7 @@ class Orchestrator:
 
         # 2) Cancel any in-flight task and leave the OS clean.
         if self._running is not None:
+            self.audit.record("task_cancelled", task=self._running.name, reason="barge_in")
             self._log("  [barge-in] you spoke — stopping and cancelling the task cleanly")
             self.state = AgentState.INTERRUPTED
             running, self._running = self._running, None

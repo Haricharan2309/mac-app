@@ -120,6 +120,17 @@ back to `fetch` if scripting is blocked.
 | `ARIA_MODEL` | `grok-voice-latest` | realtime voice model |
 | `ARIA_READ_METHOD` | `browser` | `browser` (read the real tab) or `fetch` (no extra permission) |
 | `ARIA_READ_MAX_CHARS` | `1200` | how much of the top of the page to read |
+| `ARIA_GREETING` | _(built-in)_ | spoken greeting on startup; empty disables it |
+| `ARIA_LOG_FILE` | `aria-actions.jsonl` | local audit trail (JSONL); empty disables it |
+
+### Audit trail & privacy
+
+Aria appends what it heard as intent and what it did to a local **JSON Lines**
+file (`aria-actions.jsonl` by default) — the brief treats action logging as a
+safety requirement, and it's the most useful way to see what the live session
+actually did. It's **local-first**: the file lives on your machine, you own it,
+and you can delete it any time (or set `ARIA_LOG_FILE=` to turn it off). Nothing
+about the log is sent anywhere.
 
 ---
 
