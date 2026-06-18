@@ -1,0 +1,10 @@
+# Aria — Phase 0 dependencies
+#
+# The orchestrator + simulate mode run on these alone. Audio capture/playback
+# (sounddevice) is only imported when you actually run the live voice loop, so
+# the package still imports fine on machines without PortAudio.
+
+websockets>=12.0      # realtime WebSocket transport to the xAI (Grok) Voice Agent API
+sounddevice>=0.4.6    # local microphone capture + speaker playback (lazy-imported)
+numpy>=1.24           # PCM16 framing for the audio path
+python-dotenv>=1.0    # load API keys / settings from .env
