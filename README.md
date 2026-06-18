@@ -77,6 +77,17 @@ the real orchestrator code:
   ...
 ```
 
+### Tests
+
+The core loop is covered by a fast, hardware-free test suite (orchestrator
+ack/narration ordering, barge-in cancellation with no content leak, Grok event
+parsing, actuation):
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
 ---
 
 ## macOS permissions to grant

@@ -59,9 +59,17 @@ async def _run_text() -> None:
     runner = asyncio.create_task(orch.run())
     typer = asyncio.create_task(reader())
     try:
-        await typer
+        # Stop as soon as either side finishes, and surface a crashed session
+        # instead of leaving the user typing into the void.
+        done, pending = await asyncio.wait(
+            {runner, typer}, return_when=asyncio.FIRST_COMPLETED
+        )
+        for task in pending:
+            task.cancel()
+        for task in done:
+            if task.exception() is not None:
+                raise task.exception()  # type: ignore[misc]
     finally:
-        runner.cancel()
         await provider.close()
 
 

@@ -187,10 +187,13 @@ class Orchestrator:
 
     # --- barge-in -----------------------------------------------------------
     async def _on_barge_in(self) -> None:
-        # 1) Stop talking immediately.
+        # 1) Stop talking immediately. Flush queued audio always; only ask the
+        #    model to cancel when a response is actually in progress (otherwise
+        #    the server has nothing to cancel and emits a spurious error).
         if self.audio is not None:
             self.audio.stop_playback()
-        await self.provider.cancel_response()
+        if self._response_active:
+            await self.provider.cancel_response()
         self._response_active = False
         self._idle.set()
 
