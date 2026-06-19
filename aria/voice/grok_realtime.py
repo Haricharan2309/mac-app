@@ -18,7 +18,28 @@ from typing import Any, AsyncIterator, Optional
 import websockets
 
 from ..config import Settings
-from .base import EventType, VoiceEvent, VoiceProvider
+from .base import EventType, VoiceConnectionError, VoiceEvent, VoiceProvider
+
+
+def _explain(exc: Exception) -> str:
+    """Turn a websocket/transport failure into an actionable, user-facing hint."""
+    code = getattr(exc, "status_code", None)
+    resp = getattr(exc, "response", None)
+    if code is None and resp is not None:
+        code = getattr(resp, "status_code", None)
+    if code in (401, 403):
+        return (
+            f"Authentication failed (HTTP {code}). Your XAI_API_KEY looks invalid "
+            "or lacks Voice Agent access — check it at https://console.x.ai."
+        )
+    if code == 429:
+        return "Rate limited (HTTP 429) by xAI. Wait a moment and try again."
+    if code is not None:
+        return f"The xAI realtime endpoint returned HTTP {code}."
+    return (
+        "Couldn't reach the xAI realtime endpoint (wss://api.x.ai). Check your "
+        "network connection and that the service is reachable."
+    )
 
 
 class GrokRealtimeProvider(VoiceProvider):
@@ -34,11 +55,14 @@ class GrokRealtimeProvider(VoiceProvider):
 
     # --- lifecycle ----------------------------------------------------------
     async def connect(self, *, instructions: str, tools: list[dict], voice: str) -> None:
-        self._ws = await websockets.connect(
-            self._settings.realtime_url,
-            additional_headers={"Authorization": f"Bearer {self._settings.xai_api_key}"},
-            max_size=1 << 24,
-        )
+        try:
+            self._ws = await websockets.connect(
+                self._settings.realtime_url,
+                additional_headers={"Authorization": f"Bearer {self._settings.xai_api_key}"},
+                max_size=1 << 24,
+            )
+        except Exception as exc:  # noqa: BLE001 - normalize into an actionable error
+            raise VoiceConnectionError(_explain(exc)) from exc
         await self._send(
             {
                 "type": "session.update",

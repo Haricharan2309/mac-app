@@ -27,6 +27,14 @@ class EventType:
     CLOSED = "closed"
 
 
+class VoiceConnectionError(Exception):
+    """Raised when a provider can't establish the realtime session.
+
+    Carries a user-facing, actionable message (bad key vs. network) so the CLI
+    can show a clear hint instead of a raw traceback.
+    """
+
+
 @dataclass
 class VoiceEvent:
     type: str

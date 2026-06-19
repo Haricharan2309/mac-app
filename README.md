@@ -52,6 +52,15 @@ cp .env.example .env
 
 ## Run
 
+**Run the setup check first** — it validates your key, audio devices, and a live
+Grok connection, and tells you exactly what's wrong if anything is:
+
+```bash
+python -m aria --check
+```
+
+Then the live voice loop:
+
 ```bash
 python -m aria             # live voice — speak into your mic, Aria replies in voice
 ```

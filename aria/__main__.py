@@ -1,8 +1,10 @@
-"""Entry point:  python -m aria  [--simulate | --text]
+"""Entry point:  python -m aria  [--check | --simulate | --text]
 
 Modes:
   (default)    Live voice loop — mic in, Aria's voice out. Needs macOS, a
                microphone, headphones, and XAI_API_KEY.
+  --check      Setup pre-flight: validates your key, audio devices, and a live
+               Grok connection, with a clear pass/fail. Run this first.
   --text       Type commands instead of speaking (still drives the real Grok
                session, tool call, and actuation). Handy for testing on a Mac
                without dealing with the mic. Needs XAI_API_KEY.
@@ -19,6 +21,8 @@ import sys
 from .audit import ActionLog
 from .config import load_settings
 from .orchestrator import Orchestrator
+from .tasks.registry import TOOLS
+from .voice.base import EventType, VoiceConnectionError
 
 
 async def _run_live() -> None:
@@ -93,20 +97,83 @@ async def _run_simulate() -> None:
         print(f"    - {e['kind']:<15} {extra}")
 
 
+def _check_audio() -> None:
+    try:
+        import sounddevice as sd  # lazy: requires PortAudio
+    except Exception as exc:  # noqa: BLE001
+        print(f"  • audio:   sounddevice unavailable ({exc}). "
+              "Run `pip install -r requirements.txt` (PortAudio ships with the wheel on macOS).")
+        return
+    try:
+        mic = sd.query_devices(kind="input")
+        spk = sd.query_devices(kind="output")
+        print(f"  ✓ mic:     {mic['name']}")
+        print(f"  ✓ speaker: {spk['name']}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  • audio:   no usable devices found ({exc}). Check macOS Microphone permission.")
+
+
+async def _run_check() -> None:
+    from .voice.grok_realtime import GrokRealtimeProvider
+
+    settings = load_settings(require_key=True)
+    print("Aria — setup check\n")
+    print(f"  ✓ key:     XAI_API_KEY is set ({len(settings.xai_api_key)} chars)")
+    print(f"  ✓ target:  dashboard URL = {settings.dashboard_url}")
+    _check_audio()
+
+    provider = GrokRealtimeProvider(settings)
+    print(f"  • connecting to {settings.realtime_url} …")
+    await provider.connect(instructions="(preflight)", tools=TOOLS, voice=settings.voice)
+
+    ready = False
+    try:
+        async def _watch() -> None:
+            nonlocal ready
+            async for ev in provider.events():
+                if ev.type == EventType.SESSION_READY:
+                    ready = True
+                    return
+                if ev.type == EventType.ERROR:
+                    print(f"  ✗ server:  {ev.data.get('message', '')}")
+                    return
+                if ev.type == EventType.CLOSED:
+                    return
+
+        await asyncio.wait_for(_watch(), timeout=10)
+    except asyncio.TimeoutError:
+        print("  ✗ grok:    connected but no session-ready within 10s.")
+    finally:
+        await provider.close()
+
+    if ready:
+        print("  ✓ grok:    connected and session ready — your key works.\n")
+        print("All set. Run:  python -m aria")
+    else:
+        print("\nSomething's not right above — fix it and re-run `python -m aria --check`.")
+        sys.exit(1)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="aria", description="Aria — Phase 0 voice agent")
     group = parser.add_mutually_exclusive_group()
+    group.add_argument("--check", action="store_true", help="setup pre-flight (key, audio, connection)")
     group.add_argument("--text", action="store_true", help="type commands instead of speaking")
     group.add_argument("--simulate", action="store_true", help="offline scripted demo, no key needed")
     args = parser.parse_args()
 
     try:
-        if args.simulate:
+        if args.check:
+            asyncio.run(_run_check())
+        elif args.simulate:
             asyncio.run(_run_simulate())
         elif args.text:
             asyncio.run(_run_text())
         else:
             asyncio.run(_run_live())
+    except VoiceConnectionError as exc:
+        print(f"\n✗ Couldn't connect to the voice service:\n  {exc}")
+        sys.exit(1)
     except KeyboardInterrupt:
         print("\nbye 👋")
 
