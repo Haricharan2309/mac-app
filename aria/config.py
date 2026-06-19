@@ -72,7 +72,7 @@ def load_settings(*, require_key: bool = True) -> Settings:
 
     return Settings(
         xai_api_key=key,
-        dashboard_url=os.environ.get("ARIA_DASHBOARD_URL", "https://news.ycombinator.com").strip(),
+        dashboard_url=os.environ.get("ARIA_DASHBOARD_URL", "http://localhost:8000").strip(),
         voice=os.environ.get("ARIA_VOICE", "eve").strip(),
         model=os.environ.get("ARIA_MODEL", "grok-voice-latest").strip(),
         read_method=os.environ.get("ARIA_READ_METHOD", "browser").strip().lower(),

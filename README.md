@@ -59,6 +59,17 @@ Grok connection, and tells you exactly what's wrong if anything is:
 python -m aria --check
 ```
 
+**Optional — a local sample dashboard to read.** `ARIA_DASHBOARD_URL` defaults to
+`http://localhost:8000`. To have something there, serve the bundled sample page
+(in another terminal, from the repo root):
+
+```bash
+python3 -m http.server 8000 --directory examples
+```
+
+Now `http://localhost:8000` shows a sample "morning briefing" dashboard for Aria
+to read. Point `ARIA_DASHBOARD_URL` at your own page whenever you like.
+
 Then the live voice loop:
 
 ```bash

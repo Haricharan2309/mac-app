@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Dashboard</title>
+  <style>
+    body { font-family: -apple-system, system-ui, sans-serif; max-width: 720px;
+           margin: 40px auto; padding: 0 20px; color: #1a1a1a; line-height: 1.5; }
+    header { border-bottom: 2px solid #eee; padding-bottom: 12px; margin-bottom: 20px; }
+    h1 { margin: 0 0 4px; font-size: 28px; }
+    .muted { color: #666; font-size: 14px; }
+    .card { border: 1px solid #eee; border-radius: 10px; padding: 16px; margin: 12px 0; }
+    .up { color: #138000; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <!-- This is a sample "dashboard" for testing Aria's read-the-top-of-the-page task.
+       Serve it with:  python3 -m http.server 8000 --directory examples
+       Then say: "open my dashboard and read me the top of the page". -->
+  <header>
+    <h1>Good morning, Haricharan</h1>
+    <p class="muted">Wednesday, June 18 — here's your morning briefing.</p>
+  </header>
+
+  <section class="card">
+    <h2>Markets</h2>
+    <p>The S&amp;P 500 is <span class="up">up 0.4%</span> in early trading.
+       Your portfolio is green for the week, led by your index funds.</p>
+  </section>
+
+  <section class="card">
+    <h2>Inbox</h2>
+    <p>You have 3 new emails since last night. None are marked urgent.
+       The most recent is from your landlord about the lease renewal.</p>
+  </section>
+
+  <section class="card">
+    <h2>Calendar</h2>
+    <p>Your first meeting is at 10:00 AM with the design team.
+       You have a clear afternoon until the 3:00 PM client call.</p>
+  </section>
+</body>
+</html>
