@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aria-voice-agent"
+version = "0.0.1"
+description = "Aria — a local, headless macOS voice agent (Phase 0 vertical slice)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "websockets>=12.0",
+    "sounddevice>=0.4.6",
+    "numpy>=1.24",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+
+# Installs an `aria` command equivalent to `python -m aria`.
+[project.scripts]
+aria = "aria.__main__:main"
+
+[tool.setuptools]
+packages = [
+    "aria",
+    "aria.voice",
+    "aria.audio",
+    "aria.tasks",
+    "aria.actuation",
+]

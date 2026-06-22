@@ -21,12 +21,17 @@ from ..config import Settings
 from .base import EventType, VoiceConnectionError, VoiceEvent, VoiceProvider
 
 
-def _explain(exc: Exception) -> str:
-    """Turn a websocket/transport failure into an actionable, user-facing hint."""
+def _status_code(exc: Exception):
     code = getattr(exc, "status_code", None)
     resp = getattr(exc, "response", None)
     if code is None and resp is not None:
         code = getattr(resp, "status_code", None)
+    return code
+
+
+def _explain(exc: Exception) -> str:
+    """Turn a websocket/transport failure into an actionable, user-facing hint."""
+    code = _status_code(exc)
     if code in (401, 403):
         return (
             f"Authentication failed (HTTP {code}). Your XAI_API_KEY looks invalid "
@@ -40,6 +45,11 @@ def _explain(exc: Exception) -> str:
         "Couldn't reach the xAI realtime endpoint (wss://api.x.ai). Check your "
         "network connection and that the service is reachable."
     )
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """Auth/access failures won't fix themselves; network and rate limits might."""
+    return _status_code(exc) not in (401, 403)
 
 
 class GrokRealtimeProvider(VoiceProvider):
@@ -62,7 +72,7 @@ class GrokRealtimeProvider(VoiceProvider):
                 max_size=1 << 24,
             )
         except Exception as exc:  # noqa: BLE001 - normalize into an actionable error
-            raise VoiceConnectionError(_explain(exc)) from exc
+            raise VoiceConnectionError(_explain(exc), retryable=_is_retryable(exc)) from exc
         await self._send(
             {
                 "type": "session.update",

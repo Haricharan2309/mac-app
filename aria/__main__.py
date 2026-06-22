@@ -27,18 +27,40 @@ from .voice.base import EventType, VoiceConnectionError
 
 async def _run_live() -> None:
     from .audio.io import AudioIO
+    from .backoff import Backoff
     from .voice.grok_realtime import GrokRealtimeProvider
 
     settings = load_settings(require_key=True)
-    provider = GrokRealtimeProvider(settings)
-    audio = AudioIO(sample_rate=24_000)
-    orch = Orchestrator(settings, provider, audio, audit=ActionLog(settings.log_file))
+    audit = ActionLog(settings.log_file)
+    backoff = Backoff()
     print("Aria — live voice. Speak into your mic; press Ctrl-C to quit.")
-    try:
-        await orch.run()
-    finally:
-        await audio.stop()
-        await provider.close()
+
+    # Reconnect-on-drop: an ambient agent shouldn't die on a transient network
+    # blip. Each attempt gets a fresh provider/audio/orchestrator (clean state,
+    # no stranded task). A bad-key failure is not retryable and exits immediately.
+    while True:
+        provider = GrokRealtimeProvider(settings)
+        audio = AudioIO(sample_rate=24_000)
+        orch = Orchestrator(settings, provider, audio, audit=audit)
+        try:
+            await orch.run()  # returns when the socket closes
+            if orch.session_established:
+                backoff.reset()  # a working session dropped; start backoff fresh
+        except VoiceConnectionError as exc:
+            audit.record("connect_failed", message=str(exc), retryable=exc.retryable)
+            if not exc.retryable:
+                raise  # bad key / no access -> surfaced by main(), exit
+        finally:
+            await audio.stop()
+            await provider.close()
+
+        delay = backoff.next()
+        if delay is None:
+            print("  [reconnect] giving up after repeated failures.")
+            break
+        audit.record("reconnecting", in_seconds=delay)
+        print(f"  [reconnect] connection lost — retrying in {delay:.0f}s…")
+        await asyncio.sleep(delay)
 
 
 async def _run_text() -> None:

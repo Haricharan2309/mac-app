@@ -14,6 +14,10 @@ feels right — see [`CLAUDE.md`](./CLAUDE.md) for the full product brief and sc
 3. **Progress narration** — "opening it now… got it, reading…" masks actuation latency.
 4. **Barge-in** — speak any time and Aria stops talking; an in-flight task is **cancelled cleanly** (nothing half-finished).
 
+The live session also **reconnects on a dropped connection** (exponential backoff;
+a bad key exits immediately rather than looping), so a transient network blip
+doesn't kill the agent.
+
 ---
 
 ## Stack
@@ -47,6 +51,9 @@ cp .env.example .env
 ```
 
 `sounddevice` bundles PortAudio on macOS; no extra system install is needed.
+
+Prefer a console command? `pip install -e .` installs an `aria` entry point, so
+you can run `aria --check` / `aria` instead of `python -m aria …`.
 
 ---
 

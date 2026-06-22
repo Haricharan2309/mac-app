@@ -31,8 +31,14 @@ class VoiceConnectionError(Exception):
     """Raised when a provider can't establish the realtime session.
 
     Carries a user-facing, actionable message (bad key vs. network) so the CLI
-    can show a clear hint instead of a raw traceback.
+    can show a clear hint instead of a raw traceback. ``retryable`` tells the
+    reconnect loop whether it's worth trying again (network/rate-limit) or not
+    (bad key / lack of access).
     """
+
+    def __init__(self, message: str, *, retryable: bool = True) -> None:
+        super().__init__(message)
+        self.retryable = retryable
 
 
 @dataclass

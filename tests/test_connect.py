@@ -52,6 +52,18 @@ def test_explain_network_default():
     assert "Couldn't reach" in msg
 
 
+def test_retryable_classification():
+    class Auth(Exception):
+        status_code = 401
+
+    class RateLimited(Exception):
+        status_code = 429
+
+    assert gr._is_retryable(Auth()) is False        # bad key won't fix itself
+    assert gr._is_retryable(RateLimited()) is True  # rate limit may clear
+    assert gr._is_retryable(OSError()) is True       # network may recover
+
+
 def test_connect_wraps_transport_error(monkeypatch):
     async def impl():
         async def boom(*args, **kwargs):
@@ -62,6 +74,7 @@ def test_connect_wraps_transport_error(monkeypatch):
         with pytest.raises(VoiceConnectionError) as ei:
             await provider.connect(instructions="x", tools=[], voice="eve")
         assert "Couldn't reach" in str(ei.value)
+        assert ei.value.retryable is True
 
     asyncio.run(impl())
 
@@ -79,5 +92,6 @@ def test_connect_wraps_auth_error(monkeypatch):
         with pytest.raises(VoiceConnectionError) as ei:
             await provider.connect(instructions="x", tools=[], voice="eve")
         assert "401" in str(ei.value)
+        assert ei.value.retryable is False  # not worth reconnecting on a bad key
 
     asyncio.run(impl())

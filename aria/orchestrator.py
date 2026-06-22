@@ -68,6 +68,9 @@ class Orchestrator:
         self._response_active = False
         self._idle = asyncio.Event()
         self._idle.set()
+        # True once a session has actually come up, so the reconnect loop can
+        # tell a transient drop from a connection that never worked.
+        self.session_established = False
 
     # --- main loop ----------------------------------------------------------
     async def run(self) -> None:
@@ -95,6 +98,7 @@ class Orchestrator:
     async def _on_event(self, ev: VoiceEvent) -> None:
         t = ev.type
         if t == EventType.SESSION_READY:
+            self.session_established = True
             self.audit.record("session_ready")
             self._log("  [ready] Aria is listening. Try: "
                       '"open my dashboard and read me the top of the page"')
